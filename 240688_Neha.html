@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>4-Bar Synthesizer | Engineering Dashboard</title>
+
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --card: #161d2f;
+      --border: #2d3748;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --blue: #3b82f6;
+      --blue2: #2563eb;
+      --green: #10b981;
+      --orange: #f97316;
+      --gray: #4a5568;
+      --accent: #6366f1;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden; /* Fixed dashboard height */
+    }
+
+    /* Main Grid Layout */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      height: 100vh;
+      gap: 1px;
+      background: var(--border);
+    }
+
+    /* Side Panels */
+    .side-panel {
+      background: var(--card);
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Center Area */
+    .canvas-container {
+      background: #000;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      padding: 10px;
+      overflow: hidden;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      background: #05070a;
+      border-radius: 12px;
+      cursor: crosshair;
+    }
+
+    /* Floating Control Bar */
+    .control-bar {
+      position: absolute;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(22, 29, 47, 0.85);
+      backdrop-filter: blur(10px);
+      border: 1px solid var(--border);
+      padding: 12px 24px;
+      border-radius: 100px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 10;
+    }
+
+    /* Components */
+    h1 { font-size: 16px; margin: 0; color: var(--blue); text-transform: uppercase; letter-spacing: 1px; }
+    h2 { font-size: 13px; margin: 0; color: var(--muted); text-transform: uppercase; }
+
+    .point-card {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+
+    .point-card h3 { margin: 0 0 5px 0; font-size: 11px; color: var(--blue); }
+
+    .input-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    input[type="number"] {
+      background: #0b0f1a;
+      border: 1px solid var(--border);
+      color: white;
+      padding: 5px;
+      border-radius: 4px;
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      border: none;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .btn-primary { background: var(--blue); color: white; width: 100%; }
+    .btn-success { background: var(--green); color: white; }
+    .btn-gray { background: var(--gray); color: white; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-box {
+      background: rgba(255,255,255,0.03);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .mono {
+      font-family: 'Fira Code', 'Courier New', monospace;
+      font-size: 11px;
+      background: #05070a;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      color: #9cdcfe;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    table { width: 100%; font-size: 11px; border-collapse: collapse; }
+    th { text-align: left; color: var(--muted); padding-bottom: 8px; }
+    td { padding: 6px 0; border-top: 1px solid var(--border); }
+
+    input[type="range"] { accent-color: var(--blue); cursor: pointer; }
+
+    .badge {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    .badge.good { background: rgba(16, 185, 129, 0.2); color: #10b981; }
+    .badge.bad { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+
+    @media (max-width: 1100px) {
+      .app-layout { grid-template-columns: 250px 1fr; }
+      .side-panel:last-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-layout">
+    <aside class="side-panel">
+      <div>
+        <h1>Linkage Synthesizer</h1>
+        <p style="font-size: 11px; color: var(--muted)">Precision Point Synthesis Engine</p>
+      </div>
+
+      <div class="section">
+        <h2>Precision Points</h2>
+        <div id="pointInputs" style="margin-top:10px;"></div>
+        <button id="solveBtn" class="btn btn-primary" style="margin-top:10px;">Synthesize Linkage</button>
+      </div>
+
+      <div class="section">
+        <h2>Diagnostics</h2>
+        <div class="stat-grid">
+          <div class="stat-box">
+            <div style="font-size:10px; color:var(--muted)">GRASHOF</div>
+            <div id="grashofVal" style="margin-top:4px">—</div>
+          </div>
+          <div class="stat-box">
+            <div style="font-size:10px; color:var(--muted)">RMS ERROR</div>
+            <div id="rmsVal" style="font-weight:bold; margin-top:4px">—</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="canvas-container">
+      <canvas id="canvas" width="980" height="700"></canvas>
+      
+      <div class="control-bar">
+        <div style="display:flex; gap:8px;">
+          <button id="animateBtn" class="btn btn-success">▶ Play</button>
+          <button id="pauseBtn" class="btn btn-gray">❙❙ Pause</button>
+        </div>
+        
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span style="font-size:12px; color:var(--muted); font-weight:bold;">θ₂</span>
+          <input type="range" id="thetaSlider" min="0" max="360" value="20" step="1" />
+          <span id="thetaBadge" class="badge" style="background:var(--blue); color:white; min-width:35px; text-align:center;">20°</span>
+        </div>
+      </div>
+    </main>
+
+    <aside class="side-panel">
+      <div class="section">
+        <h2>Kinematic Parameters</h2>
+        <div class="mono" id="resultBox">Waiting for solver...</div>
+      </div>
+
+      <div class="section">
+        <h2>Error Table</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Pt</th>
+              <th>Target (X, Y)</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody id="errorTableBody">
+            <tr><td colspan="3" style="color:var(--muted)">No synthesis yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    // --------------------------------------------------
+    // Constants and DOM references
+    // --------------------------------------------------
+    const CANVAS_WIDTH = 980;
+    const CANVAS_HEIGHT = 700;
+
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+
+    const pointInputs = document.getElementById("pointInputs");
+    const solveBtn = document.getElementById("solveBtn");
+    const animateBtn = document.getElementById("animateBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+    const thetaSlider = document.getElementById("thetaSlider");
+    const thetaBadge = document.getElementById("thetaBadge");
+
+    const grashofVal = document.getElementById("grashofVal");
+    const rmsVal = document.getElementById("rmsVal");
+    const resultBox = document.getElementById("resultBox");
+    const errorTableBody = document.getElementById("errorTableBody");
+
+    const ALWAYS_SHOW_LABELS = true;
+    const ALWAYS_SHOW_CURVE = true;
+
+    // --------------------------------------------------
+    // App state
+    // --------------------------------------------------
+    let targetPoints = [
+      { x: 180, y: 400 },
+      { x: 320, y: 260 },
+      { x: 500, y: 240 },
+      { x: 680, y: 370 }
+    ];
+
+    let bestSolution = null;
+    let draggingIndex = -1;
+    let animating = false;
+    let animationFrame = null;
+    let thetaCurrent = 20 * Math.PI / 180;
+    let autoSolveTimeout = null;
+
+    let view = {
+      scale: 1,
+      cx: CANVAS_WIDTH / 2,
+      cy: CANVAS_HEIGHT / 2,
+      targetScale: 1,
+      targetCx: CANVAS_WIDTH / 2,
+      targetCy: CANVAS_HEIGHT / 2
+    };
+
+    // --------------------------------------------------
+    // Utility helpers
+    // --------------------------------------------------
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const sq = value => value * value;
+    const degToRad = deg => deg * Math.PI / 180;
+    const rand = (min, max) => Math.random() * (max - min) + min;
+    const dist = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+
+    function rotate(point, angle) {
+      return {
+        x: point.x * Math.cos(angle) - point.y * Math.sin(angle),
+        y: point.x * Math.sin(angle) + point.y * Math.cos(angle)
+      };
+    }
+
+    function resetSolutionView() {
+      bestSolution = null;
+      clearResults();
+      redraw();
+    }
+
+    function queueAutoSolve(delay = 250) {
+      clearTimeout(autoSolveTimeout);
+      autoSolveTimeout = setTimeout(() => {
+        clearResults();
+        synthesize();
+      }, delay);
+    }
+
+    function resetAndQueueSolve(delay = 250) {
+      resetSolutionView();
+      queueAutoSolve(delay);
+    }
+
+    // --------------------------------------------------
+    // Point input UI
+    // --------------------------------------------------
+    function buildPointInputs() {
+      pointInputs.innerHTML = "";
+      for (let i = 0; i < 4; i++) {
+        const card = document.createElement("div");
+        card.className = "point-card";
+        card.innerHTML = `
+          <h3>P${i + 1}</h3>
+          <div class="input-group">
+            <input type="number" id="px${i}" value="${Math.round(targetPoints[i].x)}">
+            <input type="number" id="py${i}" value="${Math.round(targetPoints[i].y)}">
+          </div>
+        `;
+        pointInputs.appendChild(card);
+      }
+      for (let i = 0; i < 4; i++) {
+        document.getElementById(`px${i}`).addEventListener("input", handleTypedPointChange);
+        document.getElementById(`py${i}`).addEventListener("input", handleTypedPointChange);
+      }
+    }
+
+    function syncInputsFromPoints() {
+      for (let i = 0; i < 4; i++) {
+        document.getElementById(`px${i}`).value = Math.round(targetPoints[i].x);
+        document.getElementById(`py${i}`).value = Math.round(targetPoints[i].y);
+      }
+    }
+
+    function handleTypedPointChange() {
+      const nextPoints = [];
+      for (let i = 0; i < 4; i++) {
+        const x = parseFloat(document.getElementById(`px${i}`).value);
+        const y = parseFloat(document.getElementById(`py${i}`).value);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+        nextPoints.push({ x: clamp(x, 20, CANVAS_WIDTH - 20), y: clamp(y, 20, CANVAS_HEIGHT - 20) });
+      }
+      targetPoints = nextPoints;
+      resetAndQueueSolve();
+    }
+
+    // --------------------------------------------------
+    // 4-bar geometry
+    // --------------------------------------------------
+    function circleIntersection(c1, r1, c2, r2, branch = 1) {
+      const dx = c2.x - c1.x;
+      const dy = c2.y - c1.y;
+      const d = Math.hypot(dx, dy);
+      if (d > r1 + r2 || d < Math.abs(r1 - r2) || d === 0) return null;
+      const a = (r1 * r1 - r2 * r2 + d * d) / (2 * d);
+      const h2 = r1 * r1 - a * a;
+      if (h2 < 0) return null;
+      const h = Math.sqrt(h2);
+      const xm = c1.x + (a * dx) / d;
+      const ym = c1.y + (a * dy) / d;
+      const rx = -(dy * h) / d;
+      const ry = (dx * h) / d;
+      return branch === 1 ? { x: xm + rx, y: ym + ry } : { x: xm - rx, y: ym - ry };
+    }
+
+    function couplerState(params, theta2) {
+      const { O2, O4, r2, r3, r4, px, py, branch } = params;
+      const A = { x: O2.x + r2 * Math.cos(theta2), y: O2.y + r2 * Math.sin(theta2) };
+      const B = circleIntersection(A, r3, O4, r4, branch === 1 ? 1 : 2);
+      if (!B) return null;
+      const phi = Math.atan2(B.y - A.y, B.x - A.x);
+      const localP = rotate({ x: px, y: py }, phi);
+      return { A, B, P: { x: A.x + localP.x, y: A.y + localP.y }, phi };
+    }
+
+    function generatedPrecisionPoints(params) {
+      const generated = [];
+      for (let i = 0; i < 4; i++) {
+        const state = couplerState(params, degToRad(params.thetaListDeg[i]));
+        if (!state) return null;
+        generated.push(state.P);
+      }
+      return generated;
+    }
+
+    // --------------------------------------------------
+    // Optimization
+    // --------------------------------------------------
+    function totalSquaredError(params) {
+      const generated = generatedPrecisionPoints(params);
+      if (!generated) return 1e18;
+      let error = 0;
+      for (let i = 0; i < 4; i++) {
+        error += sq(generated[i].x - targetPoints[i].x) + sq(generated[i].y - targetPoints[i].y);
+      }
+      const frameLength = dist(params.O2, params.O4);
+      if (frameLength < 80 || frameLength > 820) error += 2e5;
+      if (params.r2 < 15 || params.r3 < 15 || params.r4 < 15) error += 2e5;
+      if (params.r2 > 500 || params.r3 > 850 || params.r4 > 650) error += 2e5;
+      for (let i = 1; i < 4; i++) {
+        if (params.thetaListDeg[i] <= params.thetaListDeg[i - 1] + 5) error += 4e5;
+      }
+      return error;
+    }
+
+    function rmsError(params) {
+      const generated = generatedPrecisionPoints(params);
+      if (!generated) return Infinity;
+      let sum = 0;
+      for (let i = 0; i < 4; i++) {
+        sum += sq(generated[i].x - targetPoints[i].x) + sq(generated[i].y - targetPoints[i].y);
+      }
+      return Math.sqrt(sum / 4);
+    }
+
+    function grashofInfo(params) {
+      const frameLength = dist(params.O2, params.O4);
+      const lengths = [params.r2, params.r3, params.r4, frameLength].sort((a, b) => a - b);
+      const [s, p, q, l] = lengths;
+      return { g: frameLength, isGrashof: (s + l) <= (p + q), lhs: s + l, rhs: p + q };
+    }
+
+    function mutateCandidate(candidate, step) {
+      const tweakKeys = ["O2x", "O2y", "O4x", "O4y", "r2", "r3", "r4", "px", "py", "t0", "t1", "t2", "t3"];
+      const moveCount = Math.floor(rand(2, 6));
+      for (let m = 0; m < moveCount; m++) {
+        const key = tweakKeys[Math.floor(Math.random() * tweakKeys.length)];
+        const delta = rand(-step, step);
+        switch (key) {
+          case "O2x": candidate.O2.x = clamp(candidate.O2.x + delta, 20, CANVAS_WIDTH - 20); break;
+          case "O2y": candidate.O2.y = clamp(candidate.O2.y + delta, 20, CANVAS_HEIGHT - 20); break;
+          case "O4x": candidate.O4.x = clamp(candidate.O4.x + delta, 20, CANVAS_WIDTH - 20); break;
+          case "O4y": candidate.O4.y = clamp(candidate.O4.y + delta, 20, CANVAS_HEIGHT - 20); break;
+          case "r2": candidate.r2 = clamp(candidate.r2 + delta, 15, 550); break;
+          case "r3": candidate.r3 = clamp(candidate.r3 + delta, 15, 900); break;
+          case "r4": candidate.r4 = clamp(candidate.r4 + delta, 15, 700); break;
+          case "px": candidate.px = clamp(candidate.px + delta, -1000, 1000); break;
+          case "py": candidate.py = clamp(candidate.py + delta, -1000, 1000); break;
+          case "t0": candidate.thetaListDeg[0] = clamp(candidate.thetaListDeg[0] + delta * 0.15, 0, 340); break;
+          case "t1": candidate.thetaListDeg[1] = clamp(candidate.thetaListDeg[1] + delta * 0.15, 0, 340); break;
+          case "t2": candidate.thetaListDeg[2] = clamp(candidate.thetaListDeg[2] + delta * 0.15, 0, 340); break;
+          case "t3": candidate.thetaListDeg[3] = clamp(candidate.thetaListDeg[3] + delta * 0.15, 0, 340); break;
+        }
+      }
+      candidate.thetaListDeg.sort((a, b) => a - b);
+      return candidate;
+    }
+
+    function synthesize() {
+      const minX = Math.min(...targetPoints.map(p => p.x));
+      const maxX = Math.max(...targetPoints.map(p => p.x));
+      const minY = Math.min(...targetPoints.map(p => p.y));
+      const maxY = Math.max(...targetPoints.map(p => p.y));
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const span = Math.max(maxX - minX, maxY - minY);
+
+      let globalBest = null;
+      let globalBestError = Infinity;
+
+      for (const branch of [1, -1]) {
+        for (let iter = 0; iter < 18000; iter++) {
+          const candidate = {
+            O2: { x: clamp(centerX - rand(130, 320), 30, CANVAS_WIDTH - 30), y: clamp(centerY + rand(20, 220), 30, CANVAS_HEIGHT - 30) },
+            O4: { x: clamp(centerX + rand(130, 320), 30, CANVAS_WIDTH - 30), y: clamp(centerY + rand(20, 220), 30, CANVAS_HEIGHT - 30) },
+            r2: rand(30, Math.max(60, span * 0.95)),
+            r3: rand(70, Math.max(150, span * 2.2)),
+            r4: rand(30, Math.max(60, span * 1.1)),
+            px: rand(-span * 1.1, span * 1.1),
+            py: rand(-span * 1.1, span * 1.1),
+            branch,
+            thetaListDeg: [rand(5, 40), rand(45, 90), rand(95, 145), rand(150, 220)].sort((a, b) => a - b)
+          };
+          const error = totalSquaredError(candidate);
+          if (error < globalBestError) { globalBestError = error; globalBest = structuredClone(candidate); }
+        }
+      }
+      if (!globalBest) return;
+      let best = structuredClone(globalBest);
+      let bestError = totalSquaredError(best);
+      let step = Math.max(55, span * 0.30);
+      for (let phase = 0; phase < 16; phase++) {
+        for (let k = 0; k < 3600; k++) {
+          const candidate = mutateCandidate(structuredClone(best), step);
+          const error = totalSquaredError(candidate);
+          if (error < bestError) { best = candidate; bestError = error; }
+        }
+        step *= 0.58;
+      }
+      bestSolution = best;
+      updateOutputs(bestSolution, rmsError(bestSolution));
+      redraw();
+    }
+
+    // --------------------------------------------------
+    // Visuals & Viewport
+    // --------------------------------------------------
+    function getMechanismBounds(theta = thetaCurrent) {
+      const points = [...targetPoints];
+      if (bestSolution) {
+        points.push(bestSolution.O2, bestSolution.O4);
+        const generated = generatedPrecisionPoints(bestSolution);
+        if (generated) points.push(...generated);
+        for (let deg = 0; deg <= 360; deg += 6) {
+          const state = couplerState(bestSolution, degToRad(deg));
+          if (state) points.push(state.A, state.B, state.P);
+        }
+      }
+      return {
+        minX: Math.min(...points.map(p => p.x)), maxX: Math.max(...points.map(p => p.x)),
+        minY: Math.min(...points.map(p => p.y)), maxY: Math.max(...points.map(p => p.y))
+      };
+    }
+
+    function applyAutoScale(bounds) {
+      const padding = 90;
+      const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
+      const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
+      const scaleX = (CANVAS_WIDTH - padding * 2) / contentWidth;
+      const scaleY = (CANVAS_HEIGHT - padding * 2) / contentHeight;
+      view.targetScale = Math.min(scaleX, scaleY, 1.5);
+      view.targetCx = (bounds.minX + bounds.maxX) / 2;
+      view.targetCy = (bounds.minY + bounds.maxY) / 2;
+      view.scale += (view.targetScale - view.scale) * 0.12;
+      view.cx += (view.targetCx - view.cx) * 0.12;
+      view.cy += (view.targetCy - view.cy) * 0.12;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+      ctx.scale(view.scale, view.scale);
+      ctx.translate(-view.cx, -view.cy);
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = "#1a2234";
+      ctx.lineWidth = 1 / view.scale;
+      for (let x = -2000; x <= 3000; x += 50) {
+        ctx.beginPath(); ctx.moveTo(x, -2000); ctx.lineTo(x, 3000); ctx.stroke();
+      }
+      for (let y = -2000; y <= 3000; y += 50) {
+        ctx.beginPath(); ctx.moveTo(-2000, y); ctx.lineTo(3000, y); ctx.stroke();
+      }
+    }
+
+    function drawLine(a, b, color = "white", width = 2, dashed = false) {
+      ctx.beginPath();
+      ctx.setLineDash(dashed ? [7 / view.scale, 5 / view.scale] : []);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = color; ctx.lineWidth = width / view.scale; ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    function drawPoint(point, color = "red", radius = 6, label = "") {
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, radius / view.scale, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+      if (ALWAYS_SHOW_LABELS && label) {
+        ctx.fillStyle = "white"; ctx.font = `${14 / view.scale}px Inter`;
+        ctx.fillText(label, point.x + 9 / view.scale, point.y - 8 / view.scale);
+      }
+    }
+
+    function redraw(theta = null) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+      applyAutoScale(getMechanismBounds(theta ?? thetaCurrent));
+      drawGrid();
+      targetPoints.forEach((p, i) => drawPoint(p, "#ef4444", 7, `P${i + 1}`));
+
+      if (bestSolution) {
+        const params = bestSolution;
+        const curTheta = theta ?? thetaCurrent;
+        // Coupler Curve
+        const curvePts = [];
+        for (let deg = 0; deg <= 360; deg += 2) {
+          const s = couplerState(params, degToRad(deg));
+          if (s) curvePts.push(s.P);
+        }
+        if (curvePts.length > 1) {
+          ctx.beginPath(); ctx.moveTo(curvePts[0].x, curvePts[0].y);
+          curvePts.forEach(p => ctx.lineTo(p.x, p.y));
+          ctx.strokeStyle = "#10b981"; ctx.lineWidth = 2 / view.scale; ctx.stroke();
+        }
+        // Generated Points
+        const gen = generatedPrecisionPoints(params);
+        if (gen) gen.forEach((p, i) => drawPoint(p, "#06b6d4", 5, `G${i + 1}`));
+        // Mechanism
+        const st = couplerState(params, curTheta);
+        if (st) {
+          const { A, B, P } = st;
+          drawLine(params.O2, A, "#ffffff", 3);
+          drawLine(B, params.O4, "#f97316", 3);
+          drawLine(params.O2, params.O4, "#4a5568", 2, true);
+          drawLine(A, B, "#3b82f6", 3);
+          drawLine(B, P, "#3b82f6", 2);
+          drawLine(P, A, "#3b82f6", 2);
+          drawPoint(params.O2, "#ffffff", 7, "O2");
+          drawPoint(params.O4, "#ffffff", 7, "O4");
+          drawPoint(A, "#3b82f6", 6);
+          drawPoint(B, "#f97316", 6);
+          drawPoint(P, "#8b5cf6", 8, "P");
+        }
+      }
+    }
+
+    // --------------------------------------------------
+    // UI Logic
+    // --------------------------------------------------
+    function clearResults() {
+      grashofVal.innerHTML = "—"; rmsVal.textContent = "—";
+      resultBox.textContent = "No synthesis yet.";
+      errorTableBody.innerHTML = `<tr><td colspan="3" style="color:var(--muted)">No data.</td></tr>`;
+    }
+
+    function updateOutputs(params, rms) {
+      const grashof = grashofInfo(params);
+      grashofVal.innerHTML = grashof.isGrashof ? `<span class="badge good">GRASHOF</span>` : `<span class="badge bad">NON-GRASHOF</span>`;
+      rmsVal.textContent = `${rms.toFixed(2)} px`;
+      resultBox.textContent = `Pivots:
+O2: (${params.O2.x.toFixed(1)}, ${params.O2.y.toFixed(1)})
+O4: (${params.O4.x.toFixed(1)}, ${params.O4.y.toFixed(1)})
+
+Links:
+Crank r2:   ${params.r2.toFixed(2)}
+Coupler r3: ${params.r3.toFixed(2)}
+Rocker r4:  ${params.r4.toFixed(2)}
+Frame r1:   ${dist(params.O2, params.O4).toFixed(2)}
+
+Coupler Point (rel A):
+x: ${params.px.toFixed(2)}, y: ${params.py.toFixed(2)}`;
+
+      const gen = generatedPrecisionPoints(params);
+      if (gen) {
+        errorTableBody.innerHTML = "";
+        for (let i = 0; i < 4; i++) {
+          const err = dist(targetPoints[i], gen[i]);
+          errorTableBody.innerHTML += `<tr><td>P${i+1}</td><td>${targetPoints[i].x.toFixed(0)}, ${targetPoints[i].y.toFixed(0)}</td><td>${err.toFixed(2)}</td></tr>`;
+        }
+      }
+    }
+
+    function animate() {
+      if (!animating) return;
+      let nextDeg = (parseFloat(thetaSlider.value) + 1) % 360;
+      thetaCurrent = degToRad(nextDeg);
+      thetaSlider.value = nextDeg;
+      thetaBadge.textContent = `${nextDeg}°`;
+      redraw(thetaCurrent);
+      animationFrame = requestAnimationFrame(animate);
+    }
+
+    canvas.addEventListener("mousedown", e => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+      const my = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+      const worldMouse = { x: (mx - CANVAS_WIDTH / 2) / view.scale + view.cx, y: (my - CANVAS_HEIGHT / 2) / view.scale + view.cy };
+      draggingIndex = targetPoints.findIndex(p => dist(p, worldMouse) < 15 / view.scale);
+    });
+
+    window.addEventListener("mousemove", e => {
+      if (draggingIndex < 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const mx = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+      const my = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+      targetPoints[draggingIndex] = { x: (mx - CANVAS_WIDTH / 2) / view.scale + view.cx, y: (my - CANVAS_HEIGHT / 2) / view.scale + view.cy };
+      syncInputsFromPoints();
+      resetAndQueueSolve();
+    });
+
+    window.addEventListener("mouseup", () => draggingIndex = -1);
+    solveBtn.addEventListener("click", synthesize);
+    animateBtn.addEventListener("click", () => { if(!animating && bestSolution) {animating=true; animate();} });
+    pauseBtn.addEventListener("click", () => animating = false);
+    thetaSlider.addEventListener("input", () => {
+      animating = false;
+      const deg = parseFloat(thetaSlider.value);
+      thetaCurrent = degToRad(deg);
+      thetaBadge.textContent = `${deg}°`;
+      redraw(thetaCurrent);
+    });
+
+    buildPointInputs();
+    redraw();
+  </script>
+</body>
+</html>
