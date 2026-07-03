@@ -4,7 +4,7 @@
 Interactive tool for four-point coupler curve synthesis of a four-bar linkage 
 from prescribed precision points, based on Burmester theory concepts.
 
-**Live demo:** file:///Users/nehabedkegmail.com/Documents/240688_Neha.html
+**Live demo: https://nehaa-14.github.io/four_bar_linkage_synthesizer/
 
 ## Features
 - Kinematic synthesis via error-minimization search
