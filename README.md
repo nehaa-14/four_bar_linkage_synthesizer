@@ -13,4 +13,4 @@ from prescribed precision points, based on Burmester theory concepts.
 - RMS error evaluation against precision points
 
 ## Tech
-HTML, CSS, JavaScript (Canvas API) — no external libraries
+HTML, CSS, JavaScript (Canvas API)
